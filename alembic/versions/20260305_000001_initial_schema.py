@@ -7,6 +7,7 @@ Create Date: 2026-03-05 18:40:00
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
@@ -17,6 +18,40 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    user_role_enum = postgresql.ENUM("borrower", "admin", name="userrole", create_type=False)
+    product_type_enum = postgresql.ENUM("personal", "business", name="producttype", create_type=False)
+    application_status_enum = postgresql.ENUM(
+        "pending", "reviewed", "approved", "rejected", name="applicationstatus", create_type=False
+    )
+    offer_status_enum = postgresql.ENUM(
+        "offered", "accepted", "expired", "revoked", name="offerstatus", create_type=False
+    )
+    loan_status_enum = postgresql.ENUM(
+        "pending_disbursement",
+        "active",
+        "repaid",
+        "defaulted",
+        "cancelled",
+        name="loanstatus",
+        create_type=False,
+    )
+    fraud_severity_enum = postgresql.ENUM(
+        "low", "medium", "high", "critical", name="fraudseverity", create_type=False
+    )
+    fraud_status_enum = postgresql.ENUM("open", "resolved", "ignored", name="fraudstatus", create_type=False)
+
+    for enum_type in (
+        user_role_enum,
+        product_type_enum,
+        application_status_enum,
+        offer_status_enum,
+        loan_status_enum,
+        fraud_severity_enum,
+        fraud_status_enum,
+    ):
+        enum_type.create(bind, checkfirst=True)
+
     op.create_table(
         "users",
         sa.Column("id", sa.String(length=36), nullable=False),
@@ -24,7 +59,7 @@ def upgrade() -> None:
         sa.Column("phone", sa.String(length=20), nullable=True),
         sa.Column("password_hash", sa.String(length=255), nullable=False),
         sa.Column("full_name", sa.String(length=160), nullable=False),
-        sa.Column("role", sa.Enum("borrower", "admin", name="userrole"), nullable=False, server_default="borrower"),
+        sa.Column("role", user_role_enum, nullable=False, server_default="borrower"),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id"),
@@ -98,13 +133,13 @@ def upgrade() -> None:
         "loan_applications",
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("user_id", sa.String(length=36), nullable=False),
-        sa.Column("product_type", sa.Enum("personal", "business", name="producttype"), nullable=False),
+        sa.Column("product_type", product_type_enum, nullable=False),
         sa.Column("requested_amount", sa.Numeric(12, 2), nullable=False),
         sa.Column("term_days", sa.Integer(), nullable=False),
         sa.Column("purpose", sa.String(length=200), nullable=False),
         sa.Column(
             "status",
-            sa.Enum("pending", "reviewed", "approved", "rejected", name="applicationstatus"),
+            application_status_enum,
             nullable=False,
             server_default="pending",
         ),
@@ -134,7 +169,7 @@ def upgrade() -> None:
         sa.Column("duplum_cap_amount", sa.Numeric(12, 2), nullable=False),
         sa.Column(
             "status",
-            sa.Enum("offered", "accepted", "expired", "revoked", name="offerstatus"),
+            offer_status_enum,
             nullable=False,
             server_default="offered",
         ),
@@ -151,7 +186,7 @@ def upgrade() -> None:
         sa.Column("user_id", sa.String(length=36), nullable=False),
         sa.Column("application_id", sa.String(length=36), nullable=False),
         sa.Column("offer_id", sa.String(length=36), nullable=False),
-        sa.Column("product_type", sa.Enum("personal", "business", name="producttype"), nullable=False),
+        sa.Column("product_type", product_type_enum, nullable=False),
         sa.Column("principal_amount", sa.Numeric(12, 2), nullable=False),
         sa.Column("term_days", sa.Integer(), nullable=False),
         sa.Column("monthly_interest_rate", sa.Numeric(5, 4), nullable=False),
@@ -163,14 +198,7 @@ def upgrade() -> None:
         sa.Column("duplum_cap_amount", sa.Numeric(12, 2), nullable=False),
         sa.Column(
             "status",
-            sa.Enum(
-                "pending_disbursement",
-                "active",
-                "repaid",
-                "defaulted",
-                "cancelled",
-                name="loanstatus",
-            ),
+            loan_status_enum,
             nullable=False,
             server_default="pending_disbursement",
         ),
@@ -209,9 +237,9 @@ def upgrade() -> None:
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("user_id", sa.String(length=36), nullable=False),
         sa.Column("application_id", sa.String(length=36), nullable=True),
-        sa.Column("severity", sa.Enum("low", "medium", "high", "critical", name="fraudseverity"), nullable=False),
+        sa.Column("severity", fraud_severity_enum, nullable=False),
         sa.Column("reason", sa.String(length=255), nullable=False),
-        sa.Column("status", sa.Enum("open", "resolved", "ignored", name="fraudstatus"), nullable=False),
+        sa.Column("status", fraud_status_enum, nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["application_id"], ["loan_applications.id"]),
